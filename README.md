@@ -4,7 +4,7 @@ CRH源于对于多应用辗转阅读的困扰，而在构建一个比较好的PD
 
 ## 当前版本
 
-Lightning 0.7.0 的源码支持 Windows / Ubuntu / Android，采用 Rust + Tauri 2 + PDFium，前端为 TypeScript + Vite，无前端框架。运行不依赖 CRH、Node、Python、账号或 AI 服务。本次新增 Ubuntu 修复包和 Android APK；已有 Windows 发布仍为 0.6.0。
+Lightning 0.7.0 支持 Windows / Ubuntu / Android，采用 Rust + Tauri 2 + PDFium，前端为 TypeScript + Vite，无前端框架。运行不依赖 CRH、Node、Python、账号或 AI 服务。
 
 - 单行文件标签与窗口三键，应用功能收进左侧折叠菜单，阅读工具默认展开为线条图标。
 - 本地 PDF 文件选择、拖放、多标签、书签目录，阅读进度自动恢复。
@@ -34,9 +34,7 @@ Lightning 0.7.0 的源码支持 Windows / Ubuntu / Android，采用 Rust + Tauri
 
 ## 开始使用
 
-构建产物放在 `release/Lightning-0.6.0-windows-x64/`。双击其中的 `Lightning.exe`，保留旁边的 `pdfium.dll` 和许可证文件。也可以用随附合成文件 `reading-sample.pdf` 试读。
-
-完整便携 ZIP 为 `release/Lightning-0.6.0-windows-x64.zip`；安装包为 `release/Lightning_0.6.0_x64-setup.exe`。安装包已生成，尚未进行干净系统的安装 / 卸载验收。
+Windows x64 用户可从 GitHub Releases 下载安装程序并双击运行。安装包包含 PDFium 和许可证，缺少 WebView2 Runtime 时会联网安装。[下载 Windows 0.7.0 安装程序](https://github.com/FluxionLight/Lightning/releases/download/v0.7.0/Lightning_0.7.0_x64-setup.exe)
 
 Ubuntu 安装包为 `release/Lightning_0.7.0_amd64.deb`。在该目录执行 `sudo apt install ./Lightning_0.7.0_amd64.deb`，然后从应用菜单启动。以 Ubuntu 22.04 为构建基线，已在 24.04 核对安装与运行；详见 [Ubuntu 安装说明](docs/ubuntu.md)。
 

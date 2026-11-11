@@ -1,6 +1,6 @@
 # 构建与分发
 
-当前源码为 0.7.0，本次提供 Ubuntu 与 Android 产物；保留的 Windows 交付为 0.6.0。0.2 起，发布和 WebView QA 脚本默认使用独立的 `src-tauri/target-v<版本>/` 构建目录。这样旧版本运行时无需结束用户进程。脚本尊重已有 `CARGO_TARGET_DIR`，例如 `$env:CARGO_TARGET_DIR='F:\Lightning\src-tauri\target-v0.7.0'`。`pnpm release` 按源码版本输出便携目录与 ZIP，不覆盖旧交付目录。
+当前源码为 0.7.0，Windows x64 安装包通过 GitHub Releases 分发。0.2 起，发布和 WebView QA 脚本默认使用独立的 `src-tauri/target-v<版本>/` 构建目录。这样旧版本运行时无需结束用户进程。脚本尊重已有 `CARGO_TARGET_DIR`，例如 `$env:CARGO_TARGET_DIR='F:\Lightning\src-tauri\target-v0.7.0'`。`pnpm release` 按源码版本输出便携目录与 ZIP，不覆盖旧交付目录。
 
 ## 已验证环境
 
