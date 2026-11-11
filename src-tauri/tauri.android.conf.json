@@ -1,0 +1,10 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "app": {
+    "windows": [{ "label": "main", "title": "Lightning", "zoomHotkeysEnabled": false }]
+  },
+  "bundle": {
+    "resources": {},
+    "android": { "minSdkVersion": 26, "versionCode": 7000 }
+  }
+}

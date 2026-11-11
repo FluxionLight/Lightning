@@ -1,0 +1,26 @@
+.document-stowed{display:none!important;}
+.document-transitioning{opacity:0!important;pointer-events:none!important;}
+.document-transitioning *{pointer-events:none!important;}
+.tab-document-flight{position:fixed;overflow:hidden;pointer-events:none;z-index:10000;transform-origin:0 0;will-change:transform,opacity;contain:layout style;}
+.has-tab-transitions .stowed-message{opacity:0;}
+.tab.tab-stowed{opacity:.62;}
+.tab.tab-stowed .tab-title::before{content:"";display:inline-block;width:6px;height:6px;margin-right:7px;border:1px solid currentColor;border-radius:2px;vertical-align:1px;}
+.stowed-message{position:absolute;inset:0;display:grid;place-items:center;pointer-events:none;color:var(--muted);font-size:12px;}
+#reading-workspace[data-mode="desk"] .document-card.document-framed{display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--border);border-radius:17px;box-shadow:var(--shadow);}
+#reading-workspace[data-mode="desk"] .document-framed.document-active{border-color:var(--accent);}
+#reading-workspace[data-mode="desk"] .document-framed .document-handle{position:static;display:flex;width:100%;height:32px;min-height:32px;max-width:none;padding:0 12px;border-radius:17px 17px 0 0;opacity:1;background:var(--surface);}
+#reading-workspace[data-mode="desk"] .document-framed .document-stage{display:flex;flex:1;min-height:0;height:auto;overflow:hidden;isolation:isolate;container-type:inline-size;border-radius:0 0 16px 16px;}
+#reading-workspace[data-mode="desk"] .document-framed .pdf-viewport{display:block;flex:1;min-height:0;width:100%;height:auto;overflow:auto;padding:0;cursor:default;}
+#reading-workspace[data-mode="desk"] .document-framed .paper-mode .pdf-viewport{padding:0;}
+#reading-workspace[data-mode="desk"] .document-framed .pdf-host{display:flex;width:max-content;min-width:100%;min-height:100%;align-items:center;}
+#reading-workspace[data-mode="desk"] .document-framed .pdf-sheet{width:var(--page-width);margin:0 auto;}
+#reading-workspace[data-mode="desk"] .document-framed .pdf-page{width:var(--page-width);height:auto;}
+#reading-workspace[data-mode="desk"] .document-framed .pdf-sheet{outline:none;}
+#reading-workspace[data-mode="desk"] .document-framed .document-footer{top:36px;}
+#reading-workspace[data-mode="desk"] .document-framed .document-resize{opacity:1;right:-9px;bottom:-9px;}
+.workspace-settings{width:min(510px,94vw);}
+.workspace-settings label{margin:18px 0;}
+.workspace-settings .startup-check{display:flex;flex-direction:row;align-items:center;gap:12px;color:var(--text);font-size:14px;}
+.workspace-settings .startup-check input{width:18px;height:18px;accent-color:var(--accent);}
+.workspace-settings select{max-width:none;width:100%;}
+.workspace-settings p{font-size:12px;line-height:1.8;}

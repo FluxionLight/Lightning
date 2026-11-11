@@ -1,0 +1,75 @@
+import {clickApp,chooseReadingMode,activateTab} from "./helpers/reader-actions.mjs";
+import assert from "node:assert/strict";
+import {mkdir,writeFile} from "node:fs/promises";
+import {createServer} from "vite";
+import {chromium} from "playwright";
+import {installTauriMock} from "./helpers/mock-tauri.mjs";
+await mkdir("test-results",{recursive:true});
+const server=await createServer({server:{host:"127.0.0.1",port:0,strictPort:false},clearScreen:false});await server.listen();
+const browser=await chromium.launch({executablePath:process.env.LIGHTNING_TEST_BROWSER||"C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",headless:true});
+const page=await browser.newPage({viewport:{width:1440,height:950}});await page.addInitScript(installTauriMock);
+const checks=[],errors=[];page.on("pageerror",e=>errors.push(e.message));const pass=s=>{checks.push(s);console.log(`PASS: ${s}`);};
+const settle=async n=>{await page.waitForFunction(n=>document.querySelector("#pdf-host .pdf-page")?.dataset.page===String(n)&&document.querySelector("#pdf-viewport").getAttribute("aria-busy")==="false",n);await page.waitForFunction(()=>!document.querySelector("#pdf-host .pdf-page[data-moving]"));};
+const open=async path=>{await page.evaluate(path=>window.testMock.nextPath=path,path);await clickApp(page,"#open-btn");};
+const select=async i=>activateTab(page,i);
+const paper=i=>page.locator(".desk-paper").nth(i);
+const geometry=async i=>paper(i).evaluate(el=>({x:parseFloat(el.style.getPropertyValue("--doc-x")),y:parseFloat(el.style.getPropertyValue("--doc-y")),width:parseFloat(el.style.getPropertyValue("--doc-width")),z:Number(el.style.zIndex)}));
+async function drag(x,y,dx,dy,cancel=false){await page.mouse.move(x,y);await page.mouse.down();await page.mouse.move(x+dx,y+dy,{steps:8});if(cancel)await page.keyboard.press("Escape");await page.mouse.up();}
+try {
+  await page.goto(server.resolvedUrls.local[0]);await page.waitForTimeout(150);await open("C:/fixture/a.pdf");await settle(0);await open("C:/fixture/b.pdf");await settle(0);
+  assert.equal(await page.locator(".desk-paper:visible").count(),2);
+  for(let i=0;i<2;i++){
+    const outer=await paper(i).boundingBox(),img=await paper(i).locator(".pdf-page").boundingBox();
+    assert.ok(Math.abs(outer.x-img.x)<1&&Math.abs(outer.y-img.y)<1&&Math.abs(outer.width-img.width)<1&&Math.abs(outer.height-img.height)<1);
+    assert.ok(Math.abs(img.height/img.width-594/420)<.01);
+    assert.ok(await paper(i).locator(".pdf-viewport").evaluate(el=>Math.abs(el.clientHeight-el.scrollHeight)<2&&getComputedStyle(el).overflow==="visible"));
+  }
+  const ar=await paper(0).boundingBox(),br=await paper(1).boundingBox();
+  assert.ok(ar.x+ar.width>br.x&&ar.y+ar.height>br.y);pass("loose PDF pages overlap at their natural aspect ratio, with no clipping window or inner scrollbar");
+  const overlap={x:br.x+15,y:br.y+30};
+  assert.equal(await page.evaluate(p=>document.elementFromPoint(p.x,p.y)?.closest(".desk-paper")?.dataset.tab,overlap),"2");
+  await page.mouse.click(ar.x+25,ar.y+80);await settle(0);
+  assert.equal(await page.evaluate(p=>document.elementFromPoint(p.x,p.y)?.closest(".desk-paper")?.dataset.tab,overlap),"1");pass("actual overlap hit testing follows paper stacking order; clicking an exposed sheet brings it forward");
+  await paper(0).locator(".document-next").click();await settle(1);assert.equal(await paper(1).locator(".pdf-page").getAttribute("data-page"),"0");
+  await select(1);await settle(0);await paper(1).locator(".document-next").click();await settle(1);await paper(1).locator(".document-next").click();await settle(2);assert.equal(await paper(0).locator(".pdf-page").getAttribute("data-page"),"1");pass("floating controls navigate each document independently");
+  await select(0);await settle(1);await page.evaluate(()=>{window.testMock.renderDelay=120;document.querySelector("#next-btn").click();});await select(1);await settle(2);
+  await page.waitForFunction(()=>document.querySelector('.desk-paper[data-tab="1"] .pdf-page')?.dataset.page==="2");await page.evaluate(()=>window.testMock.renderDelay=0);
+  await select(0);await settle(2);await paper(0).locator(".document-previous").click();await settle(1);pass("an unfinished page renders on its own sheet after another file is selected");
+  const before=await geometry(0),body=await paper(0).locator(".pdf-page").boundingBox();
+  await drag(body.x+40,body.y+80,80,30);const moved=await geometry(0);assert.ok(Math.abs(moved.x-before.x-80)<2&&Math.abs(moved.y-before.y-30)<2);
+  const body2=await paper(0).locator(".pdf-page").boundingBox();await drag(body2.x+35,body2.y+60,90,40,true);assert.ok(Math.abs((await geometry(0)).x-moved.x)<1);pass("dragging the PDF itself moves the sheet; Escape cancels a move");
+  const workspace=await page.locator(".desk-viewport").boundingBox(),g0=await geometry(0),g1=await geometry(1);
+  await drag(workspace.x+15,workspace.y+18,400,100);assert.deepEqual(await geometry(0),g0);assert.deepEqual(await geometry(1),g1);
+  const panned=await paper(0).boundingBox();assert.ok(panned.x>body2.x&&panned.x<body2.x+390);
+  await drag(panned.x+20,panned.y+50,-730,-220);const negative=await geometry(0);assert.ok(negative.x<0&&negative.y<0);pass("the camera pans independently; paper can be placed beyond the origin in negative world coordinates");
+  await page.locator(".desk-home").click();await select(0);await settle(1);const fitted=await paper(0).boundingBox();assert.ok(fitted.x>workspace.x&&fitted.y>workspace.y&&fitted.x+fitted.width<workspace.x+workspace.width);pass("View all finds papers placed outside the original viewport");
+  const unchanged=await geometry(1),resize=await paper(0).locator(".document-resize").boundingBox(),old=await paper(0).boundingBox();
+  await drag(resize.x+10,resize.y+10,70,100);await settle(1);const sized=await paper(0).boundingBox();assert.ok(sized.width>old.width+40);assert.ok(Math.abs(sized.height/sized.width-594/420)<.01);assert.deepEqual(await geometry(1),unchanged);pass("resizing scales the paper proportionally without changing another document");
+  await page.locator("#page-input").fill("9");await page.locator("#page-input").press("Enter");await settle(8);const landscape=await paper(0).boundingBox();assert.ok(Math.abs(landscape.width/landscape.height-720/420)<.01);
+  await page.locator("#page-input").fill("2");await page.locator("#page-input").press("Enter");await settle(1);pass("mixed portrait and landscape pages keep their real proportions on the desk");
+  await chooseReadingMode(page,"paper");await settle(1);await select(1);await settle(2);await chooseReadingMode(page,"paper");await settle(2);
+  assert.equal(await page.locator(".desk-paper .paper-panel:visible").count(),4);
+  const main=await paper(1).boundingBox(),prev=await paper(1).locator(".paper-panel-before").boundingBox(),next=await paper(1).locator(".paper-panel-after").boundingBox();assert.ok(prev.width>0&&next.x>prev.x&&prev.width<main.width&&next.width<main.width);pass("both documents retain independently placed neighboring page piles after page scrolling and resizing");
+  const deskBefore=await geometry(1);await clickApp(page,"#workspace-focus");await settle(2);assert.equal(await page.locator(".desk-paper:visible").count(),1);await page.locator("#zoom-indicator").click();await settle(2);
+  await page.locator("#pdf-viewport").evaluate(el=>el.scrollTop=(el.scrollHeight-el.clientHeight)*.6);assert.ok(await page.locator("#pdf-viewport").evaluate(el=>el.scrollTop)>0);
+  await clickApp(page,"#workspace-desk");await settle(2);assert.deepEqual(await geometry(1),deskBefore);pass("focus reading keeps its scroll and zoom behavior; returning restores the loose paper layout");
+  await page.locator(".desk-arrange").click();await settle(2);await page.locator(".desk-zoom-out").click();await page.waitForTimeout(100);
+  await page.locator("#capture-btn").click();const img=await page.locator("#pdf-host .pdf-page").boundingBox();await drag(img.x+img.width*.1,img.y+img.height*.1,img.width*.5,img.height*.25);await page.waitForSelector("#capture-content img");
+  const region=await page.evaluate(()=>window.testMock.captures.at(-1));assert.ok(Math.abs(region.x-.1)<.01&&Math.abs(region.width-.5)<.01&&Math.abs(region.height-.25)<.01);await page.locator("#capture-close").click();pass("capture coordinates stay accurate after world translation and camera zoom");
+  await page.locator("#laser-tool").click();const ink=await page.locator("#pdf-host .pdf-page").boundingBox(),inkGeometry=await geometry(1);await drag(ink.x+45,ink.y+70,80,30);assert.ok(await page.locator(".pdf-laser-ink path").count()>0);assert.deepEqual(await geometry(1),inkGeometry);await page.keyboard.press("Escape");pass("drawing on a paper does not accidentally drag it");
+  const zoomGeometry=await geometry(1),beforeZoom=await paper(1).boundingBox(),rasterBefore=await paper(1).locator(".pdf-page").evaluate(el=>el.naturalWidth);await page.mouse.move(workspace.x+20,workspace.y+20);await page.mouse.wheel(0,-100);const afterZoom=await paper(1).boundingBox();assert.ok(afterZoom.width>beforeZoom.width);assert.deepEqual(await geometry(1),zoomGeometry);
+  await page.locator(".desk-zoom-in").click();await page.waitForTimeout(250);await settle(2);assert.ok(await paper(1).locator(".pdf-page").evaluate(el=>el.naturalWidth)>rasterBefore);pass("camera zoom preserves paper geometry and refreshes the raster for readable enlargement");
+  await clickApp(page,"#appearance-btn");await page.locator('[data-color="#6750a4"]').click();assert.equal(await page.evaluate(()=>document.documentElement.style.getPropertyValue("--accent")),"#6750a4");await page.locator(".appearance-cancel").click();assert.equal(await page.evaluate(()=>document.documentElement.style.getPropertyValue("--accent")),"#1a73e8");
+  await clickApp(page,"#appearance-btn");await page.locator('[data-color="#13795b"]').click();await page.locator('[name="themeMode"]').selectOption("dark");await page.evaluate(()=>window.testMock.nextPath="C:/fixture/landscape.jpg");await page.locator(".appearance-image").click();await page.waitForFunction(()=>document.documentElement.style.getPropertyValue("--wallpaper").includes("data:image/jpeg"));
+  await page.locator('[name="opacity"]').fill("32");await page.locator(".appearance-save").click();await page.waitForSelector(".appearance-settings",{state:"detached"});assert.equal(await page.evaluate(()=>document.documentElement.dataset.theme),"dark");assert.equal(await page.evaluate(()=>document.documentElement.style.getPropertyValue("--wallpaper-opacity")),"0.32");await page.screenshot({path:"test-results/desk-dark.png"});pass("theme preview, cancel, custom accent, background image and opacity still work");
+  await page.waitForTimeout(450);const savedGeometry=await geometry(0),savedView=await page.evaluate(()=>JSON.parse(localStorage.getItem("lightning.desk.v2")));
+  await page.reload();await open("C:/fixture/a.pdf");await settle(1);await open("C:/fixture/b.pdf");await settle(2);const restored=await geometry(0);assert.equal(restored.x,savedGeometry.x);assert.equal(restored.y,savedGeometry.y);assert.equal(restored.width,savedGeometry.width);
+  const restoredView=await page.evaluate(()=>JSON.parse(localStorage.getItem("lightning.desk.v2")));assert.deepEqual(restoredView.camera,savedView.camera);assert.equal(restoredView.scale,savedView.scale);assert.equal(await page.evaluate(()=>document.documentElement.dataset.theme),"dark");pass("paper positions, sizes, camera and appearance persist across reopening");
+  await clickApp(page,"#appearance-btn");await page.locator(".appearance-reset").click();await page.locator(".appearance-save").click();await page.waitForSelector(".appearance-settings",{state:"detached"});await page.locator(".desk-arrange").click();await settle(2);await page.screenshot({path:"test-results/desk-light.png"});
+  await open("C:/fixture/c.pdf");await settle(0);await open("C:/fixture/d.pdf");await settle(0);assert.equal(await page.locator(".desk-paper .pdf-page").count(),4);await page.locator(".desk-home").click();
+  const four=await geometry(3),fourBox=await paper(3).boundingBox();await page.keyboard.down("Space");await drag(fourBox.x+20,fourBox.y+40,-60,25);await page.keyboard.up("Space");assert.deepEqual(await geometry(3),four);pass("four different files share the same desk; Space-drag pans even over paper");
+  await page.locator(".tab-close").last().click();await page.locator(".tab-close").last().click();await page.locator(".desk-home").click();await select(1);await settle(2);
+  await page.setViewportSize({width:900,height:600});await page.locator(".desk-home").click();await page.waitForTimeout(150);assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await page.screenshot({path:"test-results/desk-900x600.png"});await select(1);await settle(2);await paper(1).locator(".document-close").click();await page.waitForFunction(()=>document.querySelectorAll(".desk-paper").length===1);await settle(1);assert.equal(await page.locator(".desk-paper .paper-panel").count(),2);pass("small screens can recover all papers; closing a file removes only its own sheet and previews");
+  assert.deepEqual(errors,[]);await writeFile("test-results/desk-results.json",JSON.stringify({checks,errors},null,2));console.log(`PASS: ${checks.length} loose desk and appearance groups`);
+}catch(e){console.log(await page.evaluate(()=>({status:document.querySelector("#status").textContent,papers:[...document.querySelectorAll(".desk-paper")].map(c=>({class:c.className,style:c.getAttribute("style"),page:c.querySelector(".pdf-page")?.dataset.page,busy:c.querySelector(".pdf-viewport")?.getAttribute("aria-busy")}))})));await page.screenshot({path:"test-results/desk-failure.png"});throw e;}
+finally{await browser.close();await server.close();}

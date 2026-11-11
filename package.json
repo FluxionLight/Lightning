@@ -1,0 +1,37 @@
+{
+  "name": "lightning-reader",
+  "private": true,
+  "version": "0.7.0",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "tauri": "tauri",
+    "test": "node tests/logic.mjs && node tests/reader-ui.mjs && node tests/desk-ui.mjs && node tests/scroll-shell-ui.mjs && node tests/document-zoom-ui.mjs && node tests/workspace-ui.mjs && node tests/tab-motion-ui.mjs && node tests/document-outline-ui.mjs && node tests/paper-toggle-ui.mjs && node tests/lazy-desk-ui.mjs",
+    "test:input": "node tests/input-mobile-ui.mjs",
+    "test:lazy": "node tests/lazy-desk-ui.mjs",
+    "test:paper": "node tests/paper-toggle-ui.mjs",
+    "test:outline": "node tests/document-outline-ui.mjs",
+    "test:motion": "node tests/tab-motion-ui.mjs",
+    "test:workspace": "node tests/workspace-ui.mjs",
+    "test:zoom": "node tests/document-zoom-ui.mjs",
+    "test:scroll": "node tests/scroll-shell-ui.mjs",
+    "test:desk": "node tests/desk-ui.mjs",
+    "test:ui": "node tests/reader-ui.mjs",
+    "test:webview": "powershell -ExecutionPolicy Bypass -File scripts/test-webview.ps1",
+    "test:native": "node tests/make-fixture.mjs && cargo test --locked --manifest-path src-tauri/Cargo.toml --lib && cargo run --locked --manifest-path src-tauri/Cargo.toml --example smoke",
+    "release": "powershell -ExecutionPolicy Bypass -File scripts/release.ps1"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "2.11.1",
+    "@tauri-apps/plugin-dialog": "2.7.3"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "2.12.4",
+    "playwright": "1.64.1",
+    "typescript": "5.9.3",
+    "vite": "6.4.5"
+  }
+}

@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no,viewport-fit=cover"><meta name="theme-color" content="#edf1f7"><title>Lightning · PDF 阅读器</title></head>
+<body>
+  <div id="app">
+    <header class="titlebar" data-tauri-drag-region>
+      <nav id="tabs" class="tabs" aria-label="已打开的 PDF" data-tauri-drag-region><span class="tabs-empty" data-tauri-drag-region>Lightning</span></nav>
+      <div class="titlebar-grab" data-tauri-drag-region></div>
+      <div class="window-controls"><button id="window-minimize" data-icon="minimize" aria-label="最小化"></button><button id="window-maximize" data-icon="maximize" aria-label="最大化"></button><button id="window-close" data-icon="close" aria-label="关闭窗口"></button></div>
+    </header>
+    <main class="reader-body">
+      <aside class="app-sidebar" aria-label="应用与阅读工具">
+        <button id="menu-toggle" class="rail-button menu-toggle" data-icon="menu" aria-label="应用菜单" aria-controls="app-menu" aria-expanded="false"></button>
+        <nav id="app-menu" class="app-menu hidden" aria-label="文件、模式与设置">
+          <button id="open-btn" class="rail-button" data-icon="open" aria-label="打开 PDF · Ctrl O"></button>
+          <span class="rail-divider"></span>
+          <button id="workspace-desk" class="rail-button" data-icon="desk" aria-label="无界桌面" aria-pressed="true"></button>
+          <button id="workspace-focus" class="rail-button" data-icon="focus" aria-label="专注阅读" aria-pressed="false"></button>
+          <button id="reading-mode" class="rail-button" data-icon="paper" aria-label="显示纸叠" aria-pressed="false"></button>
+          <span class="rail-divider"></span>
+          <button id="appearance-btn" class="rail-button" data-icon="theme" aria-label="外观与背景"></button>
+          <button id="shortcuts-btn" class="rail-button" data-icon="shortcuts" aria-label="快捷键设置"></button>
+          <button id="ink-settings-btn" class="rail-button" data-icon="settings" aria-label="画笔设置"></button>
+          <button id="startup-settings-btn" class="rail-button" data-icon="startup" aria-label="启动与恢复"></button>
+          <button id="help-btn" class="rail-button" data-icon="help" aria-label="使用帮助"></button>
+        </nav>
+        <section id="reader-toolbar" class="reader-rail" aria-label="阅读工具">
+          <button id="document-frame" class="rail-button" data-icon="frame" aria-label="切换摊开或框内阅读" aria-pressed="false"></button>
+          <span class="rail-divider"></span>
+          <div class="ink-tools" role="group" aria-label="临时阅读画笔">
+            <button id="read-tool" class="rail-button active" data-icon="cursor" aria-label="普通阅读"></button>
+            <button id="laser-tool" class="rail-button" data-icon="pen" aria-label="激光笔"></button>
+            <button id="highlighter-tool" class="rail-button" data-icon="marker" aria-label="激光荧光笔"></button>
+            <button id="clear-ink" class="rail-button" data-icon="erase" aria-label="清除临时笔迹"></button>
+          </div>
+          <button id="anchor-btn" class="rail-button" data-icon="anchor" aria-label="设置锚点"></button>
+          <button id="capture-btn" class="rail-button" data-icon="capture" aria-label="框选 PDF 区域 · Ctrl G"></button>
+          <label class="rail-select" title="框选输出方式：截图 / 识别文字"><span id="capture-mode-icon" data-icon="image" aria-label="截图"></span><select id="capture-mode" aria-label="框选输出方式"><option value="png">截图</option><option value="ocr">识别文字</option></select></label>
+          <span class="rail-divider"></span>
+          <button id="prev-btn" class="rail-button" data-icon="up" aria-label="上一页 · 从页尾回看"></button>
+          <label class="page-counter"><input id="page-input" type="number" min="1" value="1" aria-label="当前页码"><span>/ <span id="page-count">—</span></span></label>
+          <button id="next-btn" class="rail-button" data-icon="down" aria-label="下一页 · 从页首阅读"></button>
+          <span class="rail-divider"></span>
+          <button id="zoom-in" class="rail-button" data-icon="plus" aria-label="放大纸张"></button>
+          <button id="zoom-indicator" class="rail-button zoom-value" title="恢复纸张 100%" aria-label="恢复纸张 100%">100%</button>
+          <button id="zoom-out" class="rail-button" data-icon="minus" aria-label="缩小纸张"></button>
+          <button id="fit-page" class="rail-button" data-icon="fitPage" aria-label="适合整页"></button>
+          <button id="fit-width" class="rail-button" data-icon="fitWidth" aria-label="适合宽度"></button>
+          <button id="reset-paper" class="rail-button hidden" data-icon="reset" aria-label="重置纸叠，保留阅读篇幅记忆"></button>
+          <div id="desk-tools"></div>
+        </section>
+      </aside>
+      <aside id="outline" class="outline-side" aria-label="PDF 目录"><div class="side-heading"><span>文档目录</span><button id="outline-close" class="btn icon" aria-label="关闭目录">×</button></div><div id="outline-items"><p class="muted">打开 PDF 后查看目录</p></div></aside>
+      <div id="pdf-stage" class="pdf-stage">
+        <div id="pdf-viewport" class="pdf-viewport" tabindex="0" aria-label="PDF 阅读区"><div id="pdf-host" class="pdf-host"><div class="placeholder">
+          <span class="empty-mark"><svg viewBox="0 0 32 36" aria-hidden="true"><path d="M20 3 7 21h9l-4 13L27 14h-9Z" fill="currentColor"/></svg></span><h1 class="placeholder-title">把注意力留给这一页。</h1><p>打开一份 PDF，开始轻快、专注的阅读。</p><button class="btn primary empty-open">打开 PDF <kbd>Ctrl O</kbd></button><p class="placeholder-hint">也可以将文件拖放到窗口 · 一切留在本机</p>
+        </div></div></div>
+        <div id="loading" class="loading hidden" role="status"><span class="spinner"></span>正在呈现页面</div>
+        <div id="ocr-overlay" class="ocr-overlay hidden"><div id="capture-rect" class="capture-rect"></div><p class="capture-hint">拖动框选当前 PDF · Esc 取消</p></div>
+        <div id="drop-hint" class="drop-hint hidden">松开以打开 PDF</div>
+      </div>
+      <aside id="capture-panel" class="capture-panel hidden" aria-label="区域捕获结果"><div class="side-heading"><span>区域捕获</span><button id="capture-close" class="btn icon" aria-label="关闭捕获结果">×</button></div><p id="capture-source" class="muted"></p><div id="capture-content"></div><div class="capture-actions"><button id="capture-copy" class="btn primary">复制</button><button id="capture-save" class="btn">保存 PNG</button></div></aside>
+    </main>
+    <footer class="status-bar"><span class="status-dot"></span><span id="status" role="status">准备好，开始阅读。</span><span id="reading-detail" class="reading-detail sr-only">本地 PDF · 无需账号</span></footer>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

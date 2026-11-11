@@ -1,0 +1,19 @@
+.themed-select{position:relative;width:100%;min-width:0;}
+select.themed-native-select{position:absolute!important;inset:auto!important;left:0!important;top:0!important;width:1px!important;height:1px!important;min-width:0!important;max-width:1px!important;padding:0!important;border:0!important;opacity:0!important;pointer-events:none!important;clip-path:inset(50%)!important;}
+.themed-select-button{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;min-height:40px;border:1px solid var(--border);border-radius:12px;padding:8px 12px;color:var(--text);background:var(--surface-alt);text-align:left;}
+.themed-select-button:hover:not(:disabled),.themed-select-button[aria-expanded=true]{background:var(--accent-container);border-color:var(--accent);}
+.themed-select-value{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.themed-select-arrow{font-size:17px;color:var(--muted);line-height:1;flex:none;}
+.themed-select-rail{width:36px;}
+.themed-select-rail .themed-select-button{min-height:33px;width:36px;height:33px;border:0;padding:0;justify-content:center;border-radius:12px;color:var(--muted);background:transparent;}
+.themed-select-rail .themed-select-button[aria-expanded=true]{color:var(--accent);background:var(--accent-container);}
+.themed-select-rail .themed-select-arrow{position:absolute;right:0;bottom:0;font-size:11px;}
+.themed-options{position:fixed;inset:auto;display:none;flex-direction:column;gap:3px;margin:0;padding:6px;border:1px solid var(--border);border-radius:16px;background:var(--surface);color:var(--text);box-shadow:var(--shadow);overflow:auto;overscroll-behavior:contain;scrollbar-width:thin;z-index:50000;}
+.themed-options:popover-open{display:flex;}
+.themed-options.options-open{display:flex;}
+.themed-options::backdrop{background:transparent;}
+.themed-option{display:flex;align-items:center;justify-content:space-between;gap:14px;flex:none;border:0;border-radius:10px;min-height:37px;padding:8px 11px;color:var(--text);background:transparent;text-align:left;font:inherit;font-size:12px;}
+.themed-option:is(:hover,.option-active){background:var(--surface-alt);}
+.themed-option[aria-selected=true]{background:var(--accent-container);color:var(--accent);}
+.themed-option-check{visibility:hidden;flex:none;}
+.themed-option[aria-selected=true] .themed-option-check{visibility:visible;}

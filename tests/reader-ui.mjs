@@ -1,0 +1,115 @@
+import {clickApp,chooseReadingMode,activateTab} from "./helpers/reader-actions.mjs";
+import assert from "node:assert/strict";
+import {mkdir,writeFile} from "node:fs/promises";
+import {createServer} from "vite";
+import {chromium} from "playwright";
+import {installTauriMock} from "./helpers/mock-tauri.mjs";
+await mkdir("test-results",{recursive:true});
+const server=await createServer({server:{host:"127.0.0.1",port:0,strictPort:false},clearScreen:false});await server.listen();
+const browser=await chromium.launch({executablePath:process.env.LIGHTNING_TEST_BROWSER||"C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",headless:true});
+const context=await browser.newContext({viewport:{width:1320,height:860}});const page=await context.newPage();
+const errors=[],checks=[];page.on("pageerror",e=>errors.push(e.message));await page.addInitScript(installTauriMock);
+const check=name=>{checks.push(name);console.log(`PASS: ${name}`);};
+const settle=async index=>{await page.waitForFunction(index=>document.querySelector("#pdf-host .pdf-page")?.dataset.page===String(index)&&document.querySelector("#pdf-viewport").getAttribute("aria-busy")==="false",index);};
+const still=async()=>page.waitForFunction(()=>!document.querySelector("#pdf-host .pdf-page[data-moving]"));
+const open=async path=>{await page.evaluate(path=>window.testMock.nextPath=path,path);await clickApp(page,"#open-btn");};
+const jump=async p=>{await page.locator("#page-input").fill(String(p+1));await page.locator("#page-input").press("Enter");await settle(p);};
+const scroll=async y=>page.locator("#pdf-viewport").evaluate((el,y)=>el.scrollTop=(el.scrollHeight-el.clientHeight)*y,y);
+const captureRegion=async()=>{await still();await page.locator("#capture-btn").click();const b=await page.locator("#pdf-host .pdf-page").boundingBox();await page.mouse.move(b.x+25,b.y+30);await page.mouse.down();await page.mouse.move(b.x+Math.min(220,b.width-25),b.y+150);await page.mouse.up();};
+try {
+  await page.goto(server.resolvedUrls.local[0]);await clickApp(page,"#workspace-focus");await page.waitForTimeout(150);
+  assert.equal(await page.locator("#status.error").count(),0);
+  await page.screenshot({path:"test-results/welcome.png"});
+  await open("C:/fixture/a.pdf");await settle(0);assert.equal(await page.locator(".tab").count(),1);
+  await open("C:\\fixture\\A.pdf");await settle(0);assert.equal(await page.locator(".tab").count(),1);check("open and canonical duplicate activation");
+  await page.locator("#zoom-indicator").click();await settle(0);await page.locator("#next-btn").click();await settle(1);
+  assert.equal(await page.locator("#pdf-viewport").evaluate(el=>el.scrollTop),0);
+  await page.locator("#prev-btn").click();await settle(0);
+  assert.ok(await page.locator("#pdf-viewport").evaluate(el=>el.scrollTop>=el.scrollHeight-el.clientHeight-2));
+  await page.locator(".desk-paper.document-active .document-outline-toggle").click();await page.locator(".outline-item").first().click();await settle(0);
+  assert.equal(await page.locator("#pdf-viewport").evaluate(el=>el.scrollTop),0);await page.locator("#outline-close").click();check("forward starts at top, backward at bottom, same-page outline starts at top");
+  await scroll(.63);await page.locator("#anchor-btn").click();await jump(3);await page.locator("#anchor-btn").click();await settle(0);
+  const ratio=await page.locator("#pdf-viewport").evaluate(el=>el.scrollTop/(el.scrollHeight-el.clientHeight));assert.ok(Math.abs(ratio-.63)<.02);assert.match(await page.locator("#anchor-btn").innerText(),/设置锚点/);check("one-time anchor restores position and consumes on success");
+  const beforePaperMode=await page.locator('#pdf-viewport').evaluate(el=>({w:el.scrollWidth,h:el.scrollHeight}));await chooseReadingMode(page,"paper");await settle(0);await still();await page.waitForSelector("#pdf-stage .paper-pile-after img");
+  await page.locator("#pdf-stage .paper-pile-after").click();await settle(1);await still();
+  const fit=await page.locator("#pdf-viewport").evaluate(el=>({w:el.scrollWidth,h:el.scrollHeight}));assert.deepEqual(fit,beforePaperMode);
+  // Keyboard resizing is deterministic and follows the same commit path as pointer release.
+  await page.locator("#pdf-stage .paper-panel-after .paper-panel-resize").focus();for(let i=0;i<8;i++)await page.keyboard.press("Shift+ArrowRight");
+  const large=await page.locator("#pdf-stage .paper-panel-after").boundingBox();assert.ok(large.width>300);await page.locator("#pdf-stage .paper-panel-after .paper-panel-remember").click();
+  await page.locator("#pdf-stage .paper-panel-after .paper-panel-resize").focus();for(let i=0;i<8;i++)await page.keyboard.press("Shift+ArrowLeft");
+  const small=await page.locator("#pdf-stage .paper-panel-after").boundingBox();const pile=await page.locator("#pdf-stage .paper-pile-after").boundingBox();
+  await page.mouse.move(pile.x+pile.width/2,pile.y+35);await page.mouse.down();await page.waitForTimeout(450);
+  assert.equal(await page.locator('#pdf-stage .paper-panel-after[data-reading="true"]').count(),1);assert.ok((await page.locator("#pdf-stage .paper-panel-after").boundingBox()).width>300);
+  await page.mouse.up();await page.waitForTimeout(300);assert.equal(await page.locator('#pdf-stage .paper-panel-after[data-reading="true"]').count(),0);assert.ok(Math.abs((await page.locator("#pdf-stage .paper-panel-after").boundingBox()).width-small.width)<2);assert.equal(await page.locator("#pdf-host .pdf-page").getAttribute("data-page"),"1");
+  check("independent paper size, reading-view memory, long-press temporary expansion without navigation");
+  // A drag canceled by Esc must leave persisted geometry unchanged.
+  const grip=await page.locator("#pdf-stage .paper-panel-after .paper-panel-grip").boundingBox();const beforeDrag=await page.locator("#pdf-stage .paper-panel-after").boundingBox();
+  await page.mouse.move(grip.x+10,grip.y+10);await page.mouse.down();await page.mouse.move(grip.x-120,grip.y-100);await page.keyboard.press("Escape");await page.mouse.up();
+  const afterDrag=await page.locator("#pdf-stage .paper-panel-after").boundingBox();assert.ok(Math.abs(beforeDrag.x-afterDrag.x)<2);check("Esc cancels paper drag without committing");
+  await page.locator("#pdf-viewport").focus();await page.evaluate(()=>{window.testMock.renderDelay=100;window.testMock.renders=[];for(let i=0;i<6;i++)document.querySelector("#next-btn").click();document.querySelector("#prev-btn").click();});await settle(6);await still();
+  assert.ok(await page.locator("#pdf-stage .paper-flight").count()<=4);await page.waitForTimeout(400);assert.equal(await page.locator("#pdf-stage .paper-flight").count(),0);
+  assert.ok((await page.evaluate(()=>window.testMock.renders.filter(r=>r.zoom>.2).length))<10);check("latest target wins under rapid navigation and immediate reversal; animation cleanup bounded");
+  await page.evaluate(()=>window.testMock.renderDelay=0);await page.locator("#fit-page").click();await jump(8);await still();
+  const landscape=await page.locator("#pdf-host .pdf-page").boundingBox();assert.ok(landscape.width>landscape.height);check("mixed-size pages use their own fit geometry");
+  await page.emulateMedia({reducedMotion:"reduce"});await page.locator("#prev-btn").click();await settle(7);assert.equal(await page.locator("#pdf-stage .paper-flight,#pdf-host .pdf-page[data-moving]").count(),0);await page.emulateMedia({reducedMotion:"no-preference"});
+  await page.locator("#reset-paper").click();await still();await page.screenshot({path:"test-results/paper-reader.png"});
+  await page.locator("#anchor-btn").click();await page.keyboard.press("Control+s");
+  await open("C:/fixture/b.pdf");await settle(0);assert.match(await page.locator("#anchor-btn").innerText(),/设置锚点/);assert.equal(await page.locator("#reading-mode").getAttribute("aria-pressed"),"false");
+  await activateTab(page,0);await settle(7);await still();assert.match(await page.locator("#anchor-btn").innerText(),/第 8 页/);assert.equal(await page.locator("#reading-mode").getAttribute("aria-pressed"),"true");
+  await page.locator(".tab").first().locator(".tab-close").click();await settle(0);await open("C:/fixture/a.pdf");await settle(7);await still();assert.match(await page.locator("#anchor-btn").innerText(),/第 8 页/);check("document-isolated tabs, persistent anchor, paper mode and remembered reading view survive close/reopen");
+  await page.locator("#anchor-btn").click();await settle(7);await still();await page.keyboard.press("Control+s");
+  await chooseReadingMode(page,"standard");await settle(7);await page.locator("#fit-page").click();await still();
+  await page.locator("#laser-tool").click();const image=await page.locator("#pdf-host .pdf-page").boundingBox();
+  await page.mouse.move(image.x+50,image.y+80);await page.mouse.down();await page.mouse.move(image.x+130,image.y+100);await page.waitForTimeout(2100);assert.ok(await page.locator(".pdf-laser-ink path").count()>0);await page.mouse.up();
+  await page.waitForTimeout(1350);await page.mouse.move(image.x+55,image.y+140);await page.mouse.down();await page.mouse.move(image.x+150,image.y+145);assert.ok(await page.locator(".pdf-laser-ink path").count()>1);await page.mouse.up();await page.waitForTimeout(2150);assert.equal(await page.locator(".pdf-laser-ink path").count(),0);check("held ink persists, fade interrupted by a new stroke preserves the whole group, final release fades");
+  await page.locator("#highlighter-tool").click();await page.mouse.move(image.x+50,image.y+180);await page.mouse.down();await page.mouse.move(image.x+200,image.y+180);await page.mouse.up();assert.equal(await page.locator(".pdf-laser-highlighter").evaluate(el=>getComputedStyle(el).opacity),"0.32");
+  await page.locator("#clear-ink").click();assert.equal(await page.locator(".pdf-laser-ink path").count(),0);assert.equal(await page.locator("#highlighter-tool").getAttribute("aria-pressed"),"true");await page.keyboard.press("Escape");assert.equal(await page.locator("#read-tool").getAttribute("aria-pressed"),"true");
+  await clickApp(page,"#ink-settings-btn");await page.locator('input[name="holdSeconds"]').fill("0.3");await page.locator('input[name="fadeSeconds"]').fill("0.2");await page.locator(".laser-settings button[type=submit]").click();assert.ok(await page.evaluate(()=>JSON.parse(localStorage.getItem("lightning.pdf-laser.v1")).holdSeconds===.3));check("highlighter readable, clear preserves tool, Esc exits, validated ink preferences persist");
+  await clickApp(page,"#shortcuts-btn");await page.locator('[data-command="paper.read-after"] .shortcut-capture').click();await page.keyboard.press("Control+Shift+h");await page.locator('[data-command="fit.page"] .shortcut-capture').click();await page.keyboard.press("Control+Shift+h");assert.match(await page.locator(".settings-error").innerText(),/冲突/);await page.keyboard.press("Escape");
+  await page.locator('[data-command="fit.page"] .shortcut-capture').click();await page.keyboard.press("Control+Enter");assert.equal(await page.locator(".settings-error").innerText(),"");await page.locator(".shortcut-close").click();
+  await chooseReadingMode(page,"paper");await settle(7);await still();await page.locator("#pdf-viewport").focus();
+  await page.keyboard.down("Control");await page.keyboard.down("Shift");await page.keyboard.down("h");assert.equal(await page.locator('#pdf-stage .paper-panel-after[data-reading="true"]').count(),1);await page.keyboard.up("Control");assert.equal(await page.locator('#pdf-stage .paper-panel-after[data-reading="true"]').count(),0);await page.keyboard.up("h");await page.keyboard.up("Shift");check("shortcut capture, conflicts, Ctrl Enter availability, hold release on modifier keyup");
+  await chooseReadingMode(page,"standard");await settle(7);await page.locator("#fit-page").click();await still();await captureRegion();await page.waitForSelector("#capture-content img");assert.equal(await page.evaluate(()=>window.testMock.captures.at(-1).mode),"png");await page.locator("#capture-copy").click();await page.waitForFunction(()=>window.testClipboard?.pngSize>0);check("normalized PDF-only PNG capture and clipboard Blob use independent typed result");
+  await page.locator("#capture-close").click();await page.locator("#capture-mode").selectOption("ocr");await captureRegion();await page.waitForSelector("#capture-content textarea");assert.equal(await page.locator("#capture-content textarea").inputValue(),"A quiet page\n\nSecond paragraph.");await page.locator("#capture-copy").click();assert.equal(await page.evaluate(()=>window.testClipboard.text),"A quiet page\n\nSecond paragraph.");
+  await page.locator("#capture-close").click();await page.evaluate(()=>window.testMock.captureDelay=250);await captureRegion();await page.locator("#prev-btn").click();await settle(6);await page.waitForTimeout(350);assert.equal(await page.locator("#capture-panel").isVisible(),false);check("OCR trims edges and preserves paragraphs; stale capture discarded after navigation");
+  await page.setViewportSize({width:900,height:600});await settle(6);await page.waitForTimeout(200);
+  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await page.screenshot({path:"test-results/reader-900x600.png"});check("900 x 600 wrapping toolbar has no app overflow");
+  // Saving errors must remain visible and keep the tab available for retry.
+  await page.evaluate(()=>window.testMock.failSave=true);await page.locator("#next-btn").click();await settle(7);await page.keyboard.press("Control+s");await page.waitForTimeout(100);assert.match(await page.locator("#status").innerText(),/未|failure|失败/);assert.equal(await page.locator(".tab").count(),2);
+  await page.evaluate(()=>window.testMock.failSave=false);await page.keyboard.press("Control+s");await page.waitForTimeout(100);assert.equal(await page.locator("#status.error").count(),0);check("failed save stays unsaved, retries successfully without closing or false success");
+  // Reload a persisted pending anchor, without a cached target image.
+  await page.evaluate(()=>{
+    const saved=JSON.parse(localStorage.getItem("test-reading")),a=saved["a".repeat(64)];
+    Object.assign(a,{page:7,zoom:.8,fitMode:"none",readingMode:"standard",anchor:{page:2,scrollX:.3,scrollY:.65}});
+    localStorage.setItem("test-reading",JSON.stringify(saved));
+  });
+  await page.reload();await open("C:/fixture/a.pdf");await settle(7);await page.evaluate(()=>window.testMock.failRenderPages=[2]);
+  await page.locator("#anchor-btn").click();await page.waitForFunction(()=>document.querySelector("#status").classList.contains("error"));
+  assert.match(await page.locator("#anchor-btn").innerText(),/第 3 页/);
+  await page.evaluate(()=>{window.testMock.failRenderPages=[];window.testMock.renderDelay=180;});
+  await page.locator("#anchor-btn").click();await page.locator("#next-btn").click();await settle(3);await page.waitForTimeout(250);
+  assert.match(await page.locator("#anchor-btn").innerText(),/第 3 页/);
+  await page.locator("#anchor-btn").click();await settle(2);
+  const returned=await page.locator("#pdf-viewport").evaluate(el=>el.scrollTop/(el.scrollHeight-el.clientHeight));assert.ok(Math.abs(returned-.65)<.02);
+  assert.match(await page.locator("#anchor-btn").innerText(),/设置锚点/);await page.keyboard.press("Control+s");
+  await page.locator(".tab-close").click();await page.waitForSelector(".placeholder");await open("C:/fixture/a.pdf");await settle(2);assert.match(await page.locator("#anchor-btn").innerText(),/设置锚点/);
+  assert.equal(await page.locator("#read-tool").getAttribute("aria-pressed"),"true");assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem("lightning.pdf-laser.v1")).holdSeconds),.3);
+  check("anchor survives render failure and interrupted return, clears only on successful display, stays cleared after reopening; ink resets with preferences retained");
+  await page.locator("#fit-page").click();await settle(2);await chooseReadingMode(page,"paper");await settle(2);await still();
+  // The anchor control must become enabled when a paper arrival completes.
+  await page.locator("#next-btn").click();await settle(3);await still();assert.equal(await page.locator("#anchor-btn").isEnabled(),true);
+  const savedWidth=await page.locator("#pdf-stage .paper-panel-after").boundingBox();
+  await page.locator("#pdf-stage .paper-panel-after .paper-panel-resize").focus();for(let i=0;i<18;i++)await page.keyboard.press("Shift+ArrowRight");
+  const wide=await page.locator("#pdf-stage .paper-panel-after").boundingBox();assert.ok(wide.width>600);
+  await page.setViewportSize({width:640,height:480});await page.waitForTimeout(350);const constrained=await page.locator("#pdf-stage .paper-panel-after").boundingBox();assert.ok(constrained.width<=640);
+  await page.setViewportSize({width:1320,height:860});await page.waitForTimeout(350);const restored=await page.locator("#pdf-stage .paper-panel-after").boundingBox();assert.ok(Math.abs(restored.width-wide.width)<2);assert.ok(savedWidth.width<wide.width);
+  check("animation completion re-enables anchor; window clamps preview display without shrinking saved geometry");
+  await page.locator("#read-tool").click();await page.locator("#zoom-indicator").click();await settle(3);await page.locator("#page-input").focus();await page.keyboard.press("ArrowLeft");assert.equal(await page.locator("#pdf-host .pdf-page").getAttribute("data-page"),"3");await page.locator("#page-input").blur();
+  // Close, then reopen with malformed-state read protection.
+  await page.locator(".tab-close").click();await page.waitForSelector(".placeholder");await page.evaluate(()=>{window.testMock.corrupt=true;window.testMock.saves=[];});
+  await open("C:/fixture/b.pdf");await settle(0);await page.locator("#next-btn").click();await settle(1);await page.waitForTimeout(500);assert.equal(await page.evaluate(()=>window.testMock.saves.length),0);assert.match(await page.locator("#status").innerText(),/原阅读状态已保留/);
+  check("editable focus does not dispatch navigation; malformed state stays protected without false saved status");
+  assert.deepEqual(errors,[]);
+  await writeFile("test-results/browser-results.json",JSON.stringify({checks,errors},null,2));console.log(`PASS: ${checks.length} browser regression groups, no uncaught errors`);
+} catch(e) { await page.screenshot({path:"test-results/failure.png"});throw e; }
+finally {await browser.close();await server.close();}

@@ -1,0 +1,46 @@
+[package]
+name = "lightning"
+version = "0.7.0"
+description = "Lightning — a focused local PDF reader"
+license = "MIT"
+authors = ["Lightning"]
+edition = "2021"
+
+[lib]
+name = "lightning_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+pdfium-render = "0.9"
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp"] }
+base64 = "0.22"
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows = { version = "0.62", features = [
+  "Media_Ocr", "Graphics_Imaging", "Storage_Streams", "Globalization", "Foundation",
+  "Win32_Storage_FileSystem"
+] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+gtk = "0.18"
+gdk = "0.18"
+
+[target.'cfg(target_os = "android")'.dependencies]
+tauri-plugin-fs = "2"
+
+[features]
+custom-protocol = ["tauri/custom-protocol"]
+input-qa = []
+
+[profile.release]
+strip = true
+lto = "thin"
+codegen-units = 8

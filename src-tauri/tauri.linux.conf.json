@@ -1,0 +1,18 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "bundle": {
+    "targets": ["deb"],
+    "category": "Productivity",
+    "resources": { "pdfium/linux-x64/libpdfium.so": "libpdfium.so", "pdfium/linux-x64/LICENSE": "licenses/pdfium-binaries-LICENSE", "pdfium/linux-x64/licenses/": "licenses/pdfium/" },
+    "fileAssociations": [{ "ext": ["pdf"], "name": "PDF document", "mimeType": "application/pdf" }],
+    "linux": {
+      "deb": {
+        "depends": ["libc6 (>= 2.35)", "libgcc-s1", "libstdc++6", "libgtk-3-0", "libwebkit2gtk-4.1-0", "tesseract-ocr", "tesseract-ocr-eng", "tesseract-ocr-chi-sim"],
+        "recommends": ["fonts-noto-cjk"],
+        "desktopTemplate": "linux/lightning.desktop.hbs",
+        "section": "text",
+        "files": { "/usr/share/doc/lightning/README-Ubuntu.md": "../docs/ubuntu.md" }
+      }
+    }
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "identifier": "com.lightning.pdfreader.qa",
+  "app": {
+    "windows": [{
+      "label": "main", "title": "Lightning QA", "width": 1320, "height": 860,
+      "minWidth": 640, "minHeight": 480, "center": true,
+      "decorations": false, "shadow": true,
+      "devtools": true, "additionalBrowserArgs": "--remote-debugging-port=19226"
+    }]
+  }
+}

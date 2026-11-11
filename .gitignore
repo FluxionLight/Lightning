@@ -1,0 +1,10 @@
+node_modules/
+dist/
+src-tauri/target/
+src-tauri/target-*/
+src-tauri/gen/
+release/
+test-results/
+*.tmp
+.android-signing/
+.pnpm-store/

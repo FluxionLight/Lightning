@@ -1,0 +1,22 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Lightning",
+  "version": "0.7.0",
+  "identifier": "com.lightning.pdfreader",
+  "build": {
+    "beforeDevCommand": "pnpm dev",
+    "devUrl": "http://localhost:1423",
+    "beforeBuildCommand": "pnpm build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [{ "label": "main", "title": "Lightning", "width": 1320, "height": 860, "minWidth": 640, "minHeight": 480, "center": true, "decorations": false, "shadow": true, "zoomHotkeysEnabled": false }],
+    "security": { "csp": "default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; connect-src ipc: http://ipc.localhost; script-src 'self'" }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "resources": {},
+    "icon": ["icons/32x32.png", "icons/128x128.png", "icons/icon.ico"]
+  }
+}

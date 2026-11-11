@@ -1,0 +1,11 @@
+def addLocalRepositories = { repositories ->
+    ['google', 'central', 'plugins'].each { name ->
+        repositories.maven { url = uri("http://127.0.0.1:19272/${name}/"); allowInsecureProtocol = true }
+    }
+}
+gradle.startParameter.refreshDependencies = true
+gradle.beforeSettings { settings -> addLocalRepositories(settings.pluginManagement.repositories) }
+gradle.beforeProject { project ->
+    addLocalRepositories(project.buildscript.repositories)
+    addLocalRepositories(project.repositories)
+}
